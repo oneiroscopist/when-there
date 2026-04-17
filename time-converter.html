@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Zone Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ========== Base / Default Theme ========== */
+:root {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --accent: #38bdf8;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #334155;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --card-radius: 1rem;
+  --input-bg: #0f172a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  transition: background .5s, color .3s;
+}
+
+/* Background image (Destination theme) */
+#bgImage {
+  position: fixed; inset: 0; z-index: 0;
+  background-size: cover; background-position: center;
+  opacity: 0; transition: opacity 1.2s ease;
+  pointer-events: none;
+}
+#bgImage.visible { opacity: 1; }
+#bgImage::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,.35) 0%, rgba(0,0,0,.55) 100%);
+  transition: background .8s;
+}
+/* Time-of-day overlays */
+#bgImage.tod-night::after   { background: linear-gradient(to bottom, rgba(10,10,40,.65), rgba(5,5,30,.8)); }
+#bgImage.tod-sunset::after  { background: linear-gradient(to bottom, rgba(80,20,10,.35), rgba(40,10,5,.55)); }
+#bgImage.tod-sunrise::after { background: linear-gradient(to bottom, rgba(80,50,20,.3), rgba(40,20,10,.45)); }
+#bgImage.tod-day::after     { background: linear-gradient(to bottom, rgba(0,0,0,.2), rgba(0,0,0,.4)); }
+/* Time-of-day brightness/color filters on the image itself */
+#bgImage.tod-night   { filter: brightness(.45) saturate(.6) hue-rotate(20deg); }
+#bgImage.tod-sunset  { filter: brightness(.75) saturate(1.3) sepia(.25); }
+#bgImage.tod-sunrise { filter: brightness(.8) saturate(1.1) sepia(.15); }
+#bgImage.tod-day     { filter: brightness(.85) saturate(1.05); }
+
+/* City name watermark (Destination theme) */
+#cityOverlay {
+  display: none; position: fixed; bottom: 2rem; left: 2rem; z-index: 5;
+  font-size: 3.5rem; font-weight: 700; color: rgba(255,255,255,.12);
+  letter-spacing: .04em; pointer-events: none;
+  transition: opacity .6s;
+}
+
+/* Theme picker */
+.theme-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: .6rem 1.2rem; gap: .5rem;
+  background: rgba(15,23,42,.6); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.theme-bar label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.theme-bar select {
+  padding: .35rem .6rem; border-radius: .35rem;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--text); font-size: .8rem; cursor: pointer; outline: none;
+}
+
+/* Card */
+.container {
+  position: relative; z-index: 10;
+  background: var(--card); border-radius: var(--card-radius);
+  padding: 2.5rem 2rem; max-width: 460px; width: 100%;
+  box-shadow: 0 25px 50px rgba(0,0,0,.4);
+  transition: all .4s;
+}
+h1 { font-size: 1.5rem; text-align: center; margin-bottom: .25rem; }
+.subtitle { text-align: center; color: var(--muted); font-size: .85rem; margin-bottom: 2rem; }
+label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .05em; }
+.field { margin-bottom: 1.25rem; }
+input, .container select {
+  width: 100%; padding: .7rem .9rem;
+  border: 1px solid var(--border); border-radius: .5rem;
+  background: var(--input-bg); color: var(--text);
+  font-size: 1rem; outline: none; transition: border-color .2s;
+}
+input:focus, .container select:focus { border-color: var(--accent); }
+.container select { cursor: pointer; }
+button#convertBtn {
+  width: 100%; padding: .75rem; border: none; border-radius: .5rem;
+  background: var(--accent); color: var(--bg);
+  font-size: 1rem; font-weight: 600; cursor: pointer;
+  transition: all .3s; margin-top: .5rem;
+}
+button#convertBtn:hover { opacity: .85; }
+.result { margin-top: 1.5rem; text-align: center; display: none; }
+.result .time { font-size: 2.5rem; font-weight: 700; color: var(--accent); }
+.result .details { color: var(--muted); font-size: .85rem; margin-top: .35rem; }
+.local-tz {
+  text-align: center; color: var(--muted); font-size: .75rem;
+  margin-bottom: 1.5rem; border: 1px solid var(--border);
+  border-radius: .5rem; padding: .5rem; background: rgba(56,189,248,.05);
+}
+
+/* ========== Steampunk Theme ========== */
+[data-theme="steampunk"] { --bg: #1a1207; --card: #2a1f0e; --accent: #d4a04a; --text: #e8d5b0; --muted: #a08b6a; --border: #5a4a2a; --font: 'Cinzel', serif; --card-radius: .3rem; --input-bg: #120d04; }
+[data-theme="steampunk"] body { background: repeating-linear-gradient(0deg, #1a1207 0px, #1a1207 2px, #1f160a 2px, #1f160a 4px); }
+[data-theme="steampunk"] .theme-bar { background: rgba(26,18,7,.85); border-color: #5a4a2a; }
+[data-theme="steampunk"] .theme-bar select { background: #2a1f0e; border-color: #5a4a2a; color: #e8d5b0; }
+[data-theme="steampunk"] .container {
+  border: 2px solid #5a4a2a;
+  box-shadow: 0 0 30px rgba(212,160,74,.15), inset 0 0 60px rgba(0,0,0,.3);
+}
+[data-theme="steampunk"] .container::before {
+  content: '⚙'; position: absolute; top: -20px; left: 50%;
+  transform: translateX(-50%); font-size: 2.2rem;
+  filter: drop-shadow(0 0 8px rgba(212,160,74,.5));
+}
+[data-theme="steampunk"] h1 { font-family: 'Cinzel', serif; letter-spacing: .1em; text-shadow: 0 2px 4px rgba(0,0,0,.5); }
+[data-theme="steampunk"] .subtitle { font-style: italic; }
+[data-theme="steampunk"] button#convertBtn {
+  background: linear-gradient(135deg, #8b6914, #d4a04a, #8b6914);
+  color: #1a1207; border: 1px solid #5a4a2a;
+  text-transform: uppercase; letter-spacing: .15em; font-family: 'Cinzel', serif;
+}
+[data-theme="steampunk"] button#convertBtn:hover { background: linear-gradient(135deg, #d4a04a, #f0c060, #d4a04a); opacity: 1; }
+[data-theme="steampunk"] input, [data-theme="steampunk"] .container select { font-family: 'Cinzel', serif; }
+[data-theme="steampunk"] .local-tz { background: rgba(212,160,74,.08); border-color: #5a4a2a; }
+[data-theme="steampunk"] .result .time { font-family: 'Cinzel', serif; text-shadow: 0 0 15px rgba(212,160,74,.4); }
+/* Decorative gears */
+[data-theme="steampunk"] body::before, [data-theme="steampunk"] body::after {
+  position: fixed; font-size: 6rem; opacity: .07; pointer-events: none; z-index: 0;
+}
+[data-theme="steampunk"] body::before { content: '⚙'; top: 12%; left: 5%; animation: gear-spin 20s linear infinite; }
+[data-theme="steampunk"] body::after  { content: '⚙'; bottom: 8%; right: 5%; font-size: 9rem; animation: gear-spin 30s linear infinite reverse; }
+@keyframes gear-spin { to { transform: rotate(360deg); } }
+
+/* Corner rivets */
+[data-theme="steampunk"] .container::after {
+  content: '🔩  🔩'; position: absolute; bottom: 8px; left: 0; right: 0;
+  text-align: center; font-size: .7rem; opacity: .4; letter-spacing: 12rem;
+}
+
+/* ========== Destination Theme ========== */
+[data-theme="destination"] { --bg: transparent; --card: rgba(15,23,42,.3); --accent: #ffffff; --text: #ffffff; --muted: #cbd5e1; --border: rgba(255,255,255,.18); --input-bg: rgba(0,0,0,.15); }
+[data-theme="destination"] body { background: #0f172a; }
+[data-theme="destination"] .theme-bar { background: rgba(0,0,0,.45); border-color: rgba(255,255,255,.1); }
+[data-theme="destination"] .theme-bar select { background: rgba(0,0,0,.4); border-color: rgba(255,255,255,.15); color: #fff; }
+[data-theme="destination"] .container { backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); }
+[data-theme="destination"] button#convertBtn { background: rgba(255,255,255,.9); color: #0f172a; }
+[data-theme="destination"] button#convertBtn:hover { background: #fff; opacity: 1; }
+[data-theme="destination"] .local-tz { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.12); }
+[data-theme="destination"] .result .time { text-shadow: 0 2px 12px rgba(0,0,0,.6); font-size: 3rem; }
+[data-theme="destination"] #cityOverlay { display: block; }
+
+/* Loading spinner for destination images */
+#bgSpinner {
+  display: none; position: fixed; top: 50%; left: 50%; z-index: 2;
+  transform: translate(-50%,-50%);
+  width: 40px; height: 40px; border: 3px solid rgba(255,255,255,.15);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="bgImage"></div>
+<div id="bgSpinner"></div>
+<div id="cityOverlay"></div>
+
+<div class="theme-bar">
+  <label for="themeSel">Theme</label>
+  <select id="themeSel">
+    <option value="destination">📸 Destination</option>
+    <option value="default">Default</option>
+    <option value="steampunk">⚙ Steampunk</option>
+  </select>
+</div>
+
+<div class="container">
+  <h1 id="heading">🕐 Time Zone Converter</h1>
+  <p class="subtitle" id="subtitleText">See what time it'll be somewhere else</p>
+
+  <div class="local-tz" id="localTzInfo"></div>
+
+  <div class="field">
+    <label for="dateInput">Date</label>
+    <input type="date" id="dateInput">
+  </div>
+
+  <div class="field">
+    <label for="timeInput">Your local time</label>
+    <input type="time" id="timeInput">
+  </div>
+
+  <div class="field">
+    <label for="locationSelect">Destination city</label>
+    <select id="locationSelect">
+      <option value="">— Select a city —</option>
+    </select>
+  </div>
+
+  <button id="convertBtn" onclick="convert()">Convert</button>
+
+  <div class="result" id="result">
+    <div class="time" id="convertedTime"></div>
+    <div class="details" id="details"></div>
+  </div>
+</div>
+
+<script>
+const CITIES = [
+  ["Anchorage", "America/Anchorage"],
+  ["Auckland", "Pacific/Auckland"],
+  ["Bangkok", "Asia/Bangkok"],
+  ["Beijing", "Asia/Shanghai"],
+  ["Berlin", "Europe/Berlin"],
+  ["Bogotá", "America/Bogota"],
+  ["Cairo", "Africa/Cairo"],
+  ["Chicago", "America/Chicago"],
+  ["Denver", "America/Denver"],
+  ["Dubai", "Asia/Dubai"],
+  ["Dublin", "Europe/Dublin"],
+  ["Honolulu", "Pacific/Honolulu"],
+  ["Hong Kong", "Asia/Hong_Kong"],
+  ["Istanbul", "Europe/Istanbul"],
+  ["Jakarta", "Asia/Jakarta"],
+  ["Johannesburg", "Africa/Johannesburg"],
+  ["Kolkata", "Asia/Kolkata"],
+  ["Kuala Lumpur", "Asia/Kuala_Lumpur"],
+  ["Lagos", "Africa/Lagos"],
+  ["London", "Europe/London"],
+  ["Los Angeles", "America/Los_Angeles"],
+  ["Madrid", "Europe/Madrid"],
+  ["Mexico City", "America/Mexico_City"],
+  ["Moscow", "Europe/Moscow"],
+  ["Mumbai", "Asia/Kolkata"],
+  ["Nairobi", "Africa/Nairobi"],
+  ["New York", "America/New_York"],
+  ["Paris", "Europe/Paris"],
+  ["Rome", "Europe/Rome"],
+  ["São Paulo", "America/Sao_Paulo"],
+  ["Seoul", "Asia/Seoul"],
+  ["Singapore", "Asia/Singapore"],
+  ["Stockholm", "Europe/Stockholm"],
+  ["Sydney", "Australia/Sydney"],
+  ["Taipei", "Asia/Taipei"],
+  ["Tel Aviv", "Asia/Jerusalem"],
+  ["Tokyo", "Asia/Tokyo"],
+  ["Toronto", "America/Toronto"],
+  ["Vancouver", "America/Vancouver"],
+  ["Warsaw", "Europe/Warsaw"],
+  ["Zurich", "Europe/Zurich"],
+];
+
+// Populate city select
+const sel = document.getElementById("locationSelect");
+CITIES.forEach(([city, tz]) => {
+  const opt = document.createElement("option");
+  opt.value = tz;
+  opt.textContent = city;
+  sel.appendChild(opt);
+});
+
+// Detect local timezone and derive a city name from it
+const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+document.getElementById("localTzInfo").textContent = `Your detected time zone: ${localTz}`;
+
+function cityFromTz(tz) {
+  const part = tz.split("/").pop().replace(/_/g, " ");
+  return part;
+}
+const localCity = cityFromTz(localTz);
+
+// Defaults
+const now = new Date();
+document.getElementById("dateInput").value = now.toISOString().slice(0, 10);
+document.getElementById("timeInput").value =
+  String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+
+// ========== Theme switching ==========
+const themeSel = document.getElementById("themeSel");
+themeSel.addEventListener("change", () => applyTheme(themeSel.value));
+applyTheme("destination"); // launch with destination theme
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+
+  const bg = document.getElementById("bgImage");
+  const overlay = document.getElementById("cityOverlay");
+  const heading = document.getElementById("heading");
+  const subtitle = document.getElementById("subtitleText");
+
+  if (theme === "steampunk") {
+    bg.classList.remove("visible");
+    bg.style.backgroundImage = "";
+    overlay.textContent = "";
+    heading.textContent = "⚙ Temporal Translocator";
+    subtitle.textContent = "Calibrate your chronometers across meridians";
+  } else if (theme === "destination") {
+    heading.textContent = "🕐 Time Zone Converter";
+    subtitle.textContent = "See what time it'll be somewhere else";
+    loadCityBackground(localCity, getLocalTimePeriod()); // async, fires and updates
+  } else {
+    bg.classList.remove("visible");
+    bg.style.backgroundImage = "";
+    overlay.textContent = "";
+    heading.textContent = "🕐 Time Zone Converter";
+    subtitle.textContent = "See what time it'll be somewhere else";
+  }
+}
+
+// ========== Destination background images ==========
+function getTimePeriod(hour) {
+  if (hour >= 5  && hour < 8)  return "sunrise";
+  if (hour >= 8  && hour < 17) return "day";
+  if (hour >= 17 && hour < 20) return "sunset";
+  return "night";
+}
+
+function getLocalTimePeriod() {
+  return getTimePeriod(new Date().getHours());
+}
+
+function getDestHour(localDate, destTz) {
+  const destHourStr = localDate.toLocaleTimeString("en-US", {
+    timeZone: destTz, hour: "numeric", hour12: false
+  });
+  return parseInt(destHourStr, 10);
+}
+
+const TIME_GRADIENTS = {
+  sunrise: "linear-gradient(to top, #f6d365 0%, #fda085 40%, #a18cd1 100%)",
+  day:     "linear-gradient(to top, #74b9ff 0%, #0984e3 50%, #2d3436 100%)",
+  sunset:  "linear-gradient(to top, #2d3436 0%, #d63031 35%, #fdcb6e 70%, #2d3436 100%)",
+  night:   "linear-gradient(to top, #0f0c29 0%, #302b63 50%, #24243e 100%)",
+};
+
+// Image cache — one fetch per city per session
+const imageCache = {};
+
+async function fetchCityImage(city) {
+  if (imageCache[city]) return imageCache[city];
+
+  // Wikipedia REST API — extremely reliable, CORS-enabled, no key needed
+  const wikiTitle = city.replace(/ /g, "_");
+  const urls = [
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,
+    // Some cities use different article names
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle + " city")}`,
+  ];
+
+  for (const apiUrl of urls) {
+    try {
+      const resp = await fetch(apiUrl);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const imgUrl = data.originalimage?.source || data.thumbnail?.source;
+      if (imgUrl) {
+        imageCache[city] = imgUrl;
+        return imgUrl;
+      }
+    } catch { /* try next */ }
+  }
+  return null;
+}
+
+function setTimePeriodClass(el, period) {
+  el.classList.remove("tod-day", "tod-night", "tod-sunset", "tod-sunrise");
+  el.classList.add("tod-" + period);
+}
+
+async function loadCityBackground(city, period) {
+  const bg = document.getElementById("bgImage");
+  const overlay = document.getElementById("cityOverlay");
+  const spinner = document.getElementById("bgSpinner");
+
+  overlay.textContent = city;
+  setTimePeriodClass(bg, period);
+
+  // Show gradient immediately
+  bg.style.backgroundImage = TIME_GRADIENTS[period] || TIME_GRADIENTS.night;
+  bg.classList.add("visible");
+
+  // Fetch real photo from Wikipedia
+  spinner.style.display = "block";
+  const imgUrl = await fetchCityImage(city);
+  spinner.style.display = "none";
+
+  if (imgUrl) {
+    // Preload, then crossfade
+    const img = new Image();
+    img.onload = () => {
+      bg.style.backgroundImage = `url('${img.src}')`;
+    };
+    img.src = imgUrl;
+  }
+}
+
+// ========== Conversion ==========
+function convert() {
+  const timeVal = document.getElementById("timeInput").value;
+  const dateVal = document.getElementById("dateInput").value;
+  const destTz  = document.getElementById("locationSelect").value;
+  if (!timeVal || !dateVal || !destTz) {
+    alert("Please enter a date, time, and select a city.");
+    return;
+  }
+
+  const [h, m]     = timeVal.split(":").map(Number);
+  const [y, mon, d] = dateVal.split("-").map(Number);
+  const local = new Date(y, mon - 1, d, h, m, 0, 0);
+
+  const destTime = local.toLocaleTimeString("en-US", {
+    timeZone: destTz, hour: "numeric", minute: "2-digit", hour12: true,
+  });
+  const destDate = local.toLocaleDateString("en-US", {
+    timeZone: destTz, weekday: "long", month: "short", day: "numeric",
+  });
+  const localFormatted = local.toLocaleTimeString("en-US", {
+    hour: "numeric", minute: "2-digit", hour12: true,
+  });
+
+  const fmtLocal = new Intl.DateTimeFormat("en-US", { timeZone: localTz, timeZoneName: "shortOffset" });
+  const fmtDest  = new Intl.DateTimeFormat("en-US", { timeZone: destTz,  timeZoneName: "shortOffset" });
+  const localOffset = fmtLocal.formatToParts(local).find(p => p.type === "timeZoneName")?.value || "";
+  const destOffset  = fmtDest.formatToParts(local).find(p => p.type === "timeZoneName")?.value || "";
+
+  const cityName = sel.options[sel.selectedIndex].textContent;
+
+  document.getElementById("convertedTime").textContent = destTime;
+  document.getElementById("details").textContent =
+    `${destDate} in ${cityName} (${destOffset}) — when it's ${localFormatted} for you (${localOffset})`;
+  document.getElementById("result").style.display = "block";
+
+  // In destination theme, swap background to destination city at its local time
+  if (document.documentElement.getAttribute("data-theme") === "destination") {
+    const destHour = getDestHour(local, destTz);
+    loadCityBackground(cityName, getTimePeriod(destHour));
+  }
+}
+</script>
+</body>
+</html>
